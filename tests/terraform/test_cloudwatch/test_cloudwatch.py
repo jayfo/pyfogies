@@ -18,7 +18,8 @@ from fogies.tools.terraform import (
     terraform_tfbackend,
     terraform_tfvars,
 )
-from fogies.typing import boto_client_logs
+from fogies.retry import readiness_poll_short
+from fogies.typing import CloudwatchLogEvent, boto_client_logs
 from tasks.paths import PATH_STAGING_BINARY_CACHE
 from tests.pyfogies_tests_config import PyfogiesTestsConfig
 from tests.terraform.backend import PyfogiesTestTerraformBackendStates
@@ -108,11 +109,21 @@ def test_cloudwatch_write_and_read(
         logEvents=[{"timestamp": int(time.time() * 1000), "message": message}],
     )
 
-    response = client.get_log_events(
-        logGroupName=cloudwatch_output.cloudwatch.log_group_name,
-        logStreamName=_TEST_LOG_STREAM_NAME,
-        startFromHead=True,
-    )
-    events = response.get("events", [])
+    events: list[CloudwatchLogEvent] = []
+    for attempt in readiness_poll_short(exceptions=_NoEventsYet):
+        with attempt:
+            response = client.get_log_events(
+                logGroupName=cloudwatch_output.cloudwatch.log_group_name,
+                logStreamName=_TEST_LOG_STREAM_NAME,
+                startFromHead=True,
+            )
+            events = list(response.get("events", []))
+            if not events:
+                raise _NoEventsYet("Log event not yet visible")
+
     assert len(events) == 1, "Expected 1 log event, got {}".format(len(events))
     assert events[0].get("message") == message
+
+
+class _NoEventsYet(Exception):
+    pass
