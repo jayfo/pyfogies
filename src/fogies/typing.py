@@ -8,10 +8,8 @@ import boto3
 
 if TYPE_CHECKING:
     from mypy_boto3_logs.client import CloudWatchLogsClient
-    from mypy_boto3_logs.type_defs import OutputLogEventTypeDef as CloudwatchLogEvent
     from mypy_boto3_s3.client import S3Client
 
-    __all__ = ["CloudwatchLogEvent"]
 
 
 def boto_client_s3(*, region: str) -> S3Client:

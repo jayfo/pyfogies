@@ -3,6 +3,10 @@
 import pathlib
 import time
 from collections.abc import Iterator
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from mypy_boto3_logs.type_defs import OutputLogEventTypeDef
 
 import pytest
 from pydantic import BaseModel
@@ -19,7 +23,7 @@ from fogies.tools.terraform import (
     terraform_tfvars,
 )
 from fogies.retry import readiness_poll_short
-from fogies.typing import CloudwatchLogEvent, boto_client_logs
+from fogies.typing import boto_client_logs
 from tasks.paths import PATH_STAGING_BINARY_CACHE
 from tests.pyfogies_tests_config import PyfogiesTestsConfig
 from tests.terraform.backend import PyfogiesTestTerraformBackendStates
@@ -109,7 +113,7 @@ def test_cloudwatch_write_and_read(
         logEvents=[{"timestamp": int(time.time() * 1000), "message": message}],
     )
 
-    events: list[CloudwatchLogEvent] = []
+    events: list[OutputLogEventTypeDef] = []
     for attempt in readiness_poll_short(exceptions=_NoEventsYet):
         with attempt:
             response = client.get_log_events(
