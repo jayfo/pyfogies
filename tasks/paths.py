@@ -19,3 +19,6 @@ PATH_STAGING = Path(".staging")
 
 # Binary cache directory (inside staging).
 PATH_STAGING_BINARY_CACHE = PATH_STAGING / "bin"
+
+# Terraform test backend status file, tracks applied state of the test backend and its states.
+PATH_TEST_BACKEND_STATUS = Path("tests/terraform/backend-status.toml")

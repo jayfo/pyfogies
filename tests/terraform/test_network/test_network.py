@@ -17,6 +17,7 @@ from fogies.tools.terraform import (
 )
 from tasks.paths import PATH_STAGING_BINARY_CACHE
 from tests.pyfogies_tests_config import PyfogiesTestsConfig
+from tasks.paths import PATH_TEST_BACKEND_STATUS
 from tests.terraform.backend import PyfogiesTestTerraformBackendStates
 
 
@@ -39,12 +40,12 @@ def test_network_output(
     tfbackend_path = tmp_path / "test-network.tfbackend"
     tfvars_path = tmp_path / "test-network.tfvars.json"
 
+    backend = pyfogies_test_backend[PyfogiesTestTerraformBackendStates.TEST_NETWORK.value]
+
     with (
         terraform_tfbackend(
             path=tfbackend_path,
-            backend=pyfogies_test_backend[
-                PyfogiesTestTerraformBackendStates.TEST_NETWORK.value
-            ],
+            backend=backend,
         ) as tfbackend_path,
         terraform_tfvars(
             path=tfvars_path,
@@ -56,6 +57,8 @@ def test_network_output(
             module_path=module_path,
             tfvars_path=tfvars_path,
             tfbackend_path=tfbackend_path,
+            backend=backend,
+            backend_status_path=PATH_TEST_BACKEND_STATUS,
             init_on_entry=True,
             init_params=InitParams(upgrade=True, reconfigure=True),
             apply_on_entry=True,
