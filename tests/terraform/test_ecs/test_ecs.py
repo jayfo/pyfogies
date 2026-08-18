@@ -21,6 +21,7 @@ from fogies.tools.terraform import (
     terraform_tfbackend,
     terraform_tfvars,
 )
+from fogies.typing import boto_client_ec2, boto_client_ecs
 from tasks.paths import PATH_STAGING_BINARY_CACHE, PATH_TEST_BACKEND_STATUS
 from tests.pyfogies_tests_config import PyfogiesTestsConfig
 from tests.terraform.backend import PyfogiesTestTerraformBackendStates
@@ -34,7 +35,7 @@ class _TestEcsVars(BaseModel):
     name: str
     vpc_id: str
     subnet_ids: list[str]
-    security_group_ids: list[str]
+    alb_security_group_id: str
     listener_https_arn: str
 
 
@@ -73,7 +74,7 @@ def ecs_output(
                 name=_TEST_ECS_NAME,
                 vpc_id=pyfogies_test_network.vpc_id,
                 subnet_ids=pyfogies_test_network.subnet_ids,
-                security_group_ids=pyfogies_test_network.security_group_ids,
+                alb_security_group_id=pyfogies_test_alb_self_signed.alb_security_group_id,
                 listener_https_arn=pyfogies_test_alb_self_signed.alb.listener_https_arn,
             ),
         ) as tfvars_path,
@@ -121,11 +122,44 @@ def _wait_for_ecs(alb: PyfogiesTestAlbOutput, pem_tmp: pathlib.Path) -> None:
                 allow_redirects=False,
             )
             if response.status_code != 200:
-                raise _Unhealthy("ECS tasks not yet healthy (ALB returned {})".format(response.status_code))
+                raise _Unhealthy(
+                    "ECS tasks not yet healthy (ALB returned {})".format(
+                        response.status_code
+                    )
+                )
 
 
 class _Unhealthy(Exception):
     pass
+
+
+def _get_task_public_ip(*, cluster_arn: str, service_name: str, region: str) -> str:
+    """Return the public IP of a running ECS Fargate task in the given service."""
+    ecs = boto_client_ecs(region=region)
+    ec2 = boto_client_ec2(region=region)
+
+    task_arns = ecs.list_tasks(cluster=cluster_arn, serviceName=service_name)[
+        "taskArns"
+    ]
+    tasks = ecs.describe_tasks(cluster=cluster_arn, tasks=task_arns)["tasks"]
+
+    for task in tasks:
+        for attachment in task.get("attachments", []):
+            if attachment.get("type") == "ElasticNetworkInterface":
+                for detail in attachment.get("details", []):
+                    if detail.get("name") == "networkInterfaceId":
+                        eni_id: str = detail.get("value", "")
+                        interfaces = ec2.describe_network_interfaces(
+                            NetworkInterfaceIds=[eni_id]
+                        )["NetworkInterfaces"]
+                        association = interfaces[0].get("Association", {})
+                        public_ip: str = association.get("PublicIp", "")
+                        if public_ip:
+                            return public_ip
+
+    raise RuntimeError(
+        "No running task with a public IP found in service {}".format(service_name)
+    )
 
 
 def test_ecs_output(ecs_output: _TestEcsOutput) -> None:
@@ -133,9 +167,7 @@ def test_ecs_output(ecs_output: _TestEcsOutput) -> None:
     assert ecs_output.ecs.cluster_arn.startswith("arn:aws:ecs:")
     assert ecs_output.ecs.service_name == _TEST_ECS_NAME
     assert ecs_output.ecs.task_definition_arn.startswith("arn:aws:ecs:")
-    assert ecs_output.ecs.target_group_arn.startswith(
-        "arn:aws:elasticloadbalancing:"
-    )
+    assert ecs_output.ecs.target_group_arn.startswith("arn:aws:elasticloadbalancing:")
 
 
 def test_ecs_https_serves_nginx(
@@ -161,3 +193,17 @@ def test_ecs_https_serves_nginx(
         response.status_code
     )
     assert "nginx" in response.text.lower(), "Expected nginx response body"
+
+
+def test_ecs_direct_access_blocked(
+    ecs_output: _TestEcsOutput,
+    pyfogies_test_config: PyfogiesTestsConfig,
+) -> None:
+    """Direct HTTP to the ECS task public IP is blocked by the security group."""
+    task_ip = _get_task_public_ip(
+        cluster_arn=ecs_output.ecs.cluster_arn,
+        service_name=ecs_output.ecs.service_name,
+        region=pyfogies_test_config.aws.region,
+    )
+    with pytest.raises(requests.exceptions.ConnectionError):
+        _ = requests.get("http://{}".format(task_ip), timeout=5)
