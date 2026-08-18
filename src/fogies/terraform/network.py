@@ -13,4 +13,3 @@ class NetworkOutput(BaseModel):
     vpc_id: str
     subnet_ids: list[str]
     availability_zone_to_subnet_id: dict[str, str]
-    security_group_ids: list[str]
