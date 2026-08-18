@@ -43,7 +43,7 @@ variable "listener_https_arn" {
 module "alb_dns" {
   source = "../../../terraform/alb_dns"
 
-  hosted_zone_name          = var.hosted_zone_name
+  hosted_zone_name = var.hosted_zone_name
   hostnames = [
     "test-alb-dns.${var.hosted_zone_name}",
     "test-alb-dns-1.${var.hosted_zone_name}",

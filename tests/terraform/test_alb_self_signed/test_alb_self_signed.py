@@ -56,6 +56,6 @@ def test_alb_https_reachable(
     assert (
         https_response.status_code == 503
     ), "Expected fixed-response 503, got: {}".format(https_response.status_code)
-    assert pyfogies_test_alb_self_signed.alb.alb_arn in https_response.text, (
-        "Expected ALB ARN in fixed-response body, got: {}".format(https_response.text)
-    )
+    assert (
+        pyfogies_test_alb_self_signed.alb.alb_arn in https_response.text
+    ), "Expected ALB ARN in fixed-response body, got: {}".format(https_response.text)

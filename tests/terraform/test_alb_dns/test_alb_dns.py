@@ -9,7 +9,6 @@ import requests
 from pydantic import BaseModel
 
 from fogies.retry import readiness_poll_long
-
 from fogies.terraform.backend import BackendOutput
 from fogies.tools.command import CommandParams
 from fogies.tools.terraform import (
@@ -58,7 +57,9 @@ def alb_dns_output(
     tmp_path = tmp_path_factory.mktemp("test-alb-dns")
     tfbackend_path = tmp_path / "test-alb-dns.tfbackend"
     tfvars_path = tmp_path / "test-alb-dns.tfvars.json"
-    backend = pyfogies_test_backend[PyfogiesTestTerraformBackendStates.TEST_ALB_DNS.value]
+    backend = pyfogies_test_backend[
+        PyfogiesTestTerraformBackendStates.TEST_ALB_DNS.value
+    ]
 
     with (
         terraform_tfbackend(
@@ -92,8 +93,9 @@ def alb_dns_output(
             output_model=_AlbDnsOutput,
         ) as output,
     ):
-        _wait_for_dns(output.hostname)
-        _wait_for_https(output.hostname)
+        for hostname in output.hostnames:
+            _wait_for_dns(hostname)
+            _wait_for_https(hostname)
         yield output
 
 
@@ -111,7 +113,9 @@ def _wait_for_https(hostname: str) -> None:
         )
     ):
         with attempt:
-            _ = requests.get("https://{}".format(hostname), timeout=5, allow_redirects=False)
+            _ = requests.get(
+                "https://{}".format(hostname), timeout=5, allow_redirects=False
+            )
 
 
 def test_alb_dns_http_redirects_to_https(alb_dns_output: _AlbDnsOutput) -> None:
@@ -119,22 +123,25 @@ def test_alb_dns_http_redirects_to_https(alb_dns_output: _AlbDnsOutput) -> None:
     for hostname in alb_dns_output.hostnames:
         response = requests.get(
             "http://{}".format(hostname),
+            timeout=5,
             allow_redirects=False,
         )
         assert response.status_code == 301, "{}: expected 301, got {}".format(
             hostname, response.status_code
         )
-        assert response.headers.get("Location", "").startswith("https://"), (
-            "{}: expected HTTPS redirect, got Location: {}".format(
-                hostname, response.headers.get("Location", "")
-            )
+        assert response.headers.get("Location", "").startswith(
+            "https://"
+        ), "{}: expected HTTPS redirect, got Location: {}".format(
+            hostname, response.headers.get("Location", "")
         )
 
 
 def test_alb_dns_https_reachable(alb_dns_output: _AlbDnsOutput) -> None:
     """HTTPS request to each hostname succeeds with the ACM certificate."""
     for hostname in alb_dns_output.hostnames:
-        response = requests.get("https://{}".format(hostname))
-        assert response.status_code == 503, "{}: expected ALB fixed-response 503, got {}".format(
+        response = requests.get("https://{}".format(hostname), timeout=5)
+        assert (
+            response.status_code == 503
+        ), "{}: expected ALB fixed-response 503, got {}".format(
             hostname, response.status_code
         )

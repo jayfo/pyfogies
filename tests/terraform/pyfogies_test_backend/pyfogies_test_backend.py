@@ -9,7 +9,12 @@ from pydantic import BaseModel
 from fogies.terraform.backend import BackendOutput, BackendVars
 from fogies.tools.aws_environ import AwsEnviron
 from fogies.tools.command import CommandParams
-from fogies.tools.terraform import ApplyParams, DestroyParams, InitParams, terraform_tfvars
+from fogies.tools.terraform import (
+    ApplyParams,
+    DestroyParams,
+    InitParams,
+    terraform_tfvars,
+)
 from fogies.tools.terraform_backend import terraform_backend
 from tasks.paths import PATH_STAGING_BINARY_CACHE, PATH_TEST_BACKEND_STATUS
 from tests.pyfogies_tests_config import PyfogiesTestsConfig

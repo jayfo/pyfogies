@@ -75,11 +75,11 @@ variable "memory" {
 
   validation {
     condition = (
-      (var.cpu == 256  && contains([512, 1024, 2048], var.memory)) ||
-      (var.cpu == 512  && var.memory >= 1024  && var.memory <= 4096  && var.memory % 1024 == 0) ||
-      (var.cpu == 1024 && var.memory >= 2048  && var.memory <= 8192  && var.memory % 1024 == 0) ||
-      (var.cpu == 2048 && var.memory >= 4096  && var.memory <= 16384 && var.memory % 1024 == 0) ||
-      (var.cpu == 4096 && var.memory >= 8192  && var.memory <= 30720 && var.memory % 1024 == 0)
+      (var.cpu == 256 && contains([512, 1024, 2048], var.memory)) ||
+      (var.cpu == 512 && var.memory >= 1024 && var.memory <= 4096 && var.memory % 1024 == 0) ||
+      (var.cpu == 1024 && var.memory >= 2048 && var.memory <= 8192 && var.memory % 1024 == 0) ||
+      (var.cpu == 2048 && var.memory >= 4096 && var.memory <= 16384 && var.memory % 1024 == 0) ||
+      (var.cpu == 4096 && var.memory >= 8192 && var.memory <= 30720 && var.memory % 1024 == 0)
     )
     error_message = "memory must be a valid Fargate value for the given cpu."
   }

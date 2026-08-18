@@ -7,7 +7,10 @@ import fogies.tasks.format
 import fogies.tasks.lint
 import fogies.tasks.poetry
 import fogies.tasks.test
-from tasks.paths import PATH_SECRETS_POETRY, PATH_STAGING_BINARY_CACHE
+from tasks.paths import (
+    PATH_SECRETS_POETRY,
+    PATH_STAGING_BINARY_CACHE,
+)
 
 # Root namespace for tasks.
 namespace: Collection = Collection()

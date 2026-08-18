@@ -11,6 +11,7 @@ if TYPE_CHECKING:
 import pytest
 from pydantic import BaseModel
 
+from fogies.retry import readiness_poll_short
 from fogies.terraform.backend import BackendOutput
 from fogies.terraform.cloudwatch import CloudwatchOutput
 from fogies.tools.command import CommandParams
@@ -22,7 +23,6 @@ from fogies.tools.terraform import (
     terraform_tfbackend,
     terraform_tfvars,
 )
-from fogies.retry import readiness_poll_short
 from fogies.typing import boto_client_logs
 from tasks.paths import PATH_STAGING_BINARY_CACHE, PATH_TEST_BACKEND_STATUS
 from tests.pyfogies_tests_config import PyfogiesTestsConfig
@@ -56,7 +56,9 @@ def cloudwatch_output(
     tfbackend_path = tmp_path / "test-cloudwatch.tfbackend"
     tfvars_path = tmp_path / "test-cloudwatch.tfvars.json"
 
-    backend = pyfogies_test_backend[PyfogiesTestTerraformBackendStates.TEST_CLOUDWATCH.value]
+    backend = pyfogies_test_backend[
+        PyfogiesTestTerraformBackendStates.TEST_CLOUDWATCH.value
+    ]
 
     with (
         terraform_tfbackend(

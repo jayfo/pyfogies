@@ -43,7 +43,9 @@ def pyfogies_test_network(
     tmp_path = tmp_path_factory.mktemp("pyfogies-test-network")
     tfbackend_path = tmp_path / "pyfogies-test-network.tfbackend"
     tfvars_path = tmp_path / "pyfogies-test-network.tfvars.json"
-    backend = pyfogies_test_backend[PyfogiesTestTerraformBackendStates.TEST_NETWORK.value]
+    backend = pyfogies_test_backend[
+        PyfogiesTestTerraformBackendStates.TEST_NETWORK.value
+    ]
 
     with (
         terraform_tfbackend(
