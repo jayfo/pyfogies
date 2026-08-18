@@ -30,17 +30,19 @@ _TEST_ALB_MODULE = pathlib.Path(__file__).parent / "test_alb_self_signed"
 
 class PyfogiesTestAlbOutput(BaseModel):
     alb: AlbOutput
+    alb_security_group_id: str
 
 
 class _AlbSelfSignedVars(BaseModel):
     region: str
     alb_name: str
+    vpc_id: str
     subnet_ids: list[str]
-    security_group_ids: list[str]
 
 
 class _TfAlbSelfSignedOutput(BaseModel):
     alb: AlbOutput
+    alb_security_group_id: str
 
 
 def _wait_for_alb(dns_name: str) -> None:
@@ -78,8 +80,8 @@ def pyfogies_test_alb_self_signed(
             variables=_AlbSelfSignedVars(
                 region=pyfogies_test_config.aws.region,
                 alb_name=_TEST_ALB_NAME_SELF_SIGNED,
+                vpc_id=pyfogies_test_network.vpc_id,
                 subnet_ids=list(pyfogies_test_network.subnet_ids),
-                security_group_ids=list(pyfogies_test_network.security_group_ids),
             ),
         ) as tfvars_path,
         terraform_output(
@@ -100,4 +102,7 @@ def pyfogies_test_alb_self_signed(
         ) as tf_output,
     ):
         _wait_for_alb(tf_output.alb.alb_dns_name)
-        yield PyfogiesTestAlbOutput(alb=tf_output.alb)
+        yield PyfogiesTestAlbOutput(
+            alb=tf_output.alb,
+            alb_security_group_id=tf_output.alb_security_group_id,
+        )
