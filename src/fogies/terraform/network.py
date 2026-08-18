@@ -1,12 +1,6 @@
-"""Pydantic models for Terraform network module variables and output."""
+"""Pydantic models for Terraform network module output."""
 
 from pydantic import BaseModel
-
-
-class NetworkVars(BaseModel):
-    region: str
-    availability_zone_count: int
-    tags: dict[str, str] = {}
 
 
 class NetworkOutput(BaseModel):
