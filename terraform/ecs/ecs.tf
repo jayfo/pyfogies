@@ -137,15 +137,11 @@ resource "aws_ecs_service" "service" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = var.subnet_ids
-    security_groups  = var.security_group_ids
+    subnets         = var.subnet_ids
+    security_groups = var.security_group_ids
     # Tasks run in public subnets with a public IP so they can reach ECR and
-    # other AWS APIs without a NAT gateway. In production, security_group_ids
-    # should restrict inbound to the ALB's security group only — not allow
-    # ingress from the internet directly.
-    # TODO: add a dedicated ECS security group to the network module that allows
-    # inbound only from the ALB security group, and use it here instead of
-    # relying on the caller to pass the right groups.
+    # other AWS APIs without a NAT gateway. Inbound is controlled by the
+    # caller-supplied security_group_ids.
     assign_public_ip = true
   }
 
