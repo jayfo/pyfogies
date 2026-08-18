@@ -152,10 +152,11 @@ def _get_task_public_ip(*, cluster_arn: str, service_name: str, region: str) -> 
                         interfaces = ec2.describe_network_interfaces(
                             NetworkInterfaceIds=[eni_id]
                         )["NetworkInterfaces"]
-                        association = interfaces[0].get("Association", {})
-                        public_ip: str = association.get("PublicIp", "")
-                        if public_ip:
-                            return public_ip
+                        if interfaces:
+                            association = interfaces[0].get("Association", {})
+                            public_ip: str = association.get("PublicIp", "")
+                            if public_ip:
+                                return public_ip
 
     raise RuntimeError(
         "No running task with a public IP found in service {}".format(service_name)

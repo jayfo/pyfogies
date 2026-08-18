@@ -55,4 +55,10 @@ resource "aws_acm_certificate_validation" "cert" {
 resource "aws_lb_listener_certificate" "cert" {
   listener_arn    = var.listener_https_arn
   certificate_arn = aws_acm_certificate_validation.cert.certificate_arn
+
+  lifecycle {
+    # Attach the new certificate before removing the old one so the listener
+    # is never left without a valid cert when hostnames change.
+    create_before_destroy = true
+  }
 }

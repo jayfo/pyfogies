@@ -6,6 +6,11 @@ variable "hosted_zone_name" {
 variable "hostnames" {
   description = "Hostnames to include in the certificate. The first is the primary; all must be within hosted_zone_name. A Route 53 alias record is created for each."
   type        = list(string)
+
+  validation {
+    condition     = length(var.hostnames) >= 1
+    error_message = "At least one hostname is required."
+  }
 }
 
 variable "alb_dns_name" {
