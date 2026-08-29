@@ -9,8 +9,10 @@ import boto3
 if TYPE_CHECKING:
     from mypy_boto3_ec2.client import EC2Client
     from mypy_boto3_ecs.client import ECSClient
+    from mypy_boto3_iam.client import IAMClient
     from mypy_boto3_logs.client import CloudWatchLogsClient
     from mypy_boto3_s3.client import S3Client
+    from mypy_boto3_sts.client import STSClient
 
 
 def boto_client_ec2(*, region: str) -> EC2Client:
@@ -39,3 +41,13 @@ def boto_client_s3(*, region: str) -> S3Client:
     return boto3.client(  # pyright: ignore[reportUnknownMemberType]
         "s3", region_name=region
     )
+
+
+def boto_client_iam() -> IAMClient:
+    """Obtain a boto3 IAM client from ambient environment credentials."""
+    return boto3.client("iam")  # pyright: ignore[reportUnknownMemberType]
+
+
+def boto_client_sts() -> STSClient:
+    """Obtain a boto3 STS client from ambient environment credentials."""
+    return boto3.client("sts")  # pyright: ignore[reportUnknownMemberType]

@@ -6,10 +6,18 @@ import contextlib
 import tomllib
 from collections.abc import Generator
 from pathlib import Path
+from typing import cast
 
 from pydantic import BaseModel
 
 from fogies.tools.environ import environ
+
+
+class AwsProfile(BaseModel):
+    """AWS credentials for a named profile, as stored in a TOML profiles file."""
+    name: str
+    aws_access_key_id: str
+    aws_secret_access_key: str
 
 
 class AwsEnviron(BaseModel):
@@ -22,12 +30,7 @@ class AwsEnviron(BaseModel):
 AwsEnvironContextManager = contextlib.AbstractContextManager[AwsEnviron]
 
 
-class _AwsProfile(BaseModel):
-    aws_access_key_id: str
-    aws_secret_access_key: str
-
-
-def _load_aws_profile_from_toml(profiles_path: Path, profile: str) -> _AwsProfile:
+def _load_aws_profile_from_toml(profiles_path: Path, profile: str) -> AwsProfile:
     """Return AWS profile loaded from a TOML profiles file.
 
     The file is expected to contain a table for each profile, for example:
@@ -62,7 +65,8 @@ def _load_aws_profile_from_toml(profiles_path: Path, profile: str) -> _AwsProfil
             )
         ) from exc
 
-    return _AwsProfile.model_validate(profile_raw)
+    profile_data = cast(dict[str, object], profile_raw)
+    return AwsProfile.model_validate({"name": profile, **profile_data})
 
 
 @contextlib.contextmanager
