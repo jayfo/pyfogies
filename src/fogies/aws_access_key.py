@@ -71,9 +71,11 @@ def list_users() -> list[_IamUserInfo]:
 def create_user(*, username: str) -> AwsProfile:
     """Create a new IAM user and an access key. Raises if the user already exists."""
     iam = boto_client_iam()
-    existing = {u["UserName"] for u in iam.list_users()["Users"]}
-    if username in existing:
+    try:
+        _ = iam.get_user(UserName=username)
         raise ValueError("User '{}' already exists.".format(username))
+    except iam.exceptions.NoSuchEntityException:
+        pass
 
     _ = iam.create_user(UserName=username)
     key = iam.create_access_key(UserName=username)["AccessKey"]
