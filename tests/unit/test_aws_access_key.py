@@ -22,7 +22,11 @@ def _delete_test_user_if_exists(pyfogies_test_aws_environ: AwsEnviron) -> None:
         raise
     for key in (keys.current, keys.previous):
         if key is not None:
-            aws_access_key.delete_key(username=_TEST_USERNAME, key_id=key.key_id, protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id})
+            aws_access_key.delete_key(
+                username=_TEST_USERNAME,
+                key_id=key.key_id,
+                protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id},
+            )
     aws_access_key.delete_user(username=_TEST_USERNAME, protected_usernames=set())
 
 
@@ -46,7 +50,9 @@ def test_user(pyfogies_test_aws_environ: AwsEnviron) -> Iterator[AwsProfile]:
 
 
 @pytest.fixture
-def test_profile(test_user: AwsProfile, pyfogies_test_aws_environ: AwsEnviron) -> AwsProfile:
+def test_profile(
+    test_user: AwsProfile, pyfogies_test_aws_environ: AwsEnviron
+) -> AwsProfile:
     """Reset the test user to a known state: one current key, no previous key.
 
     Minimizes AWS API calls — each call adds latency. Recreates the user if a
@@ -71,7 +77,11 @@ def test_profile(test_user: AwsProfile, pyfogies_test_aws_environ: AwsEnviron) -
             username=_TEST_USERNAME,
             protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id},
         )
-    return AwsProfile(name=_TEST_USERNAME, aws_access_key_id=keys.current.key_id, aws_secret_access_key="")
+    return AwsProfile(
+        name=_TEST_USERNAME,
+        aws_access_key_id=keys.current.key_id,
+        aws_secret_access_key="",
+    )
 
 
 def test_create_user_raises_if_exists(test_user: AwsProfile) -> None:
@@ -101,7 +111,10 @@ def test_rotate_key_creates_new_current(
     test_profile: AwsProfile,
 ) -> None:
     """rotate_key creates a new current key; the original key becomes previous."""
-    rotated = aws_access_key.rotate_key(username=_TEST_USERNAME, protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id})
+    rotated = aws_access_key.rotate_key(
+        username=_TEST_USERNAME,
+        protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id},
+    )
     assert rotated.aws_access_key_id.startswith("AKIA")
     assert rotated.aws_access_key_id != test_profile.aws_access_key_id
 
@@ -117,13 +130,19 @@ def test_rotate_key_deletes_existing_previous(
     test_profile: AwsProfile,
 ) -> None:
     """A second rotate deletes the existing previous key; second_rotate is current, first_rotate is previous."""
-    first_rotate = aws_access_key.rotate_key(username=_TEST_USERNAME, protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id})
+    first_rotate = aws_access_key.rotate_key(
+        username=_TEST_USERNAME,
+        protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id},
+    )
 
     keys = aws_access_key.get_keys(username=_TEST_USERNAME)
     assert keys.previous is not None
     assert keys.previous.key_id == test_profile.aws_access_key_id
 
-    second_rotate = aws_access_key.rotate_key(username=_TEST_USERNAME, protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id})
+    second_rotate = aws_access_key.rotate_key(
+        username=_TEST_USERNAME,
+        protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id},
+    )
 
     assert second_rotate.aws_access_key_id != first_rotate.aws_access_key_id
     assert second_rotate.aws_access_key_id != test_profile.aws_access_key_id
@@ -140,11 +159,18 @@ def test_delete_key_removes_key(
     test_profile: AwsProfile,
 ) -> None:
     """delete_key removes the specified key."""
-    aws_access_key.rotate_key(username=_TEST_USERNAME, protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id})
+    aws_access_key.rotate_key(
+        username=_TEST_USERNAME,
+        protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id},
+    )
 
     keys = aws_access_key.get_keys(username=_TEST_USERNAME)
     assert keys.previous is not None
-    aws_access_key.delete_key(username=_TEST_USERNAME, key_id=keys.previous.key_id, protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id})
+    aws_access_key.delete_key(
+        username=_TEST_USERNAME,
+        key_id=keys.previous.key_id,
+        protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id},
+    )
 
     keys = aws_access_key.get_keys(username=_TEST_USERNAME)
     assert keys.current is not None
@@ -156,7 +182,10 @@ def test_delete_key_refuses_protected_key(
     test_profile: AwsProfile,
 ) -> None:
     """delete_key raises ValueError when asked to delete a protected key."""
-    protected = {test_profile.aws_access_key_id, pyfogies_test_aws_environ.aws_access_key_id}
+    protected = {
+        test_profile.aws_access_key_id,
+        pyfogies_test_aws_environ.aws_access_key_id,
+    }
     with pytest.raises(ValueError, match="protected key"):
         aws_access_key.delete_key(
             username=_TEST_USERNAME,
@@ -171,7 +200,9 @@ def test_delete_user_raises_if_has_keys(
 ) -> None:
     """delete_user raises ValueError when the user still has keys."""
     with pytest.raises(ValueError, match="still has"):
-        aws_access_key.delete_user(username=_TEST_USERNAME, protected_usernames={test_aws_environ_username})
+        aws_access_key.delete_user(
+            username=_TEST_USERNAME, protected_usernames={test_aws_environ_username}
+        )
 
 
 def test_delete_user_raises_if_protected(
@@ -180,7 +211,11 @@ def test_delete_user_raises_if_protected(
     test_profile: AwsProfile,
 ) -> None:
     """delete_user raises ValueError when the username is protected."""
-    aws_access_key.delete_key(username=_TEST_USERNAME, key_id=test_profile.aws_access_key_id, protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id})
+    aws_access_key.delete_key(
+        username=_TEST_USERNAME,
+        key_id=test_profile.aws_access_key_id,
+        protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id},
+    )
     with pytest.raises(ValueError, match="protected user"):
         aws_access_key.delete_user(
             username=_TEST_USERNAME,
@@ -194,8 +229,14 @@ def test_delete_user_succeeds_after_keys_removed(
     test_profile: AwsProfile,
 ) -> None:
     """delete_user succeeds once all keys are gone."""
-    aws_access_key.delete_key(username=_TEST_USERNAME, key_id=test_profile.aws_access_key_id, protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id})
-    aws_access_key.delete_user(username=_TEST_USERNAME, protected_usernames={test_aws_environ_username})
+    aws_access_key.delete_key(
+        username=_TEST_USERNAME,
+        key_id=test_profile.aws_access_key_id,
+        protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id},
+    )
+    aws_access_key.delete_user(
+        username=_TEST_USERNAME, protected_usernames={test_aws_environ_username}
+    )
 
     users = aws_access_key.list_users()
     assert not any(u.username == _TEST_USERNAME for u in users)

@@ -15,6 +15,7 @@ from fogies.tools.environ import environ
 
 class AwsProfile(BaseModel):
     """AWS credentials for a named profile, as stored in a TOML profiles file."""
+
     name: str
     aws_access_key_id: str
     aws_secret_access_key: str

@@ -62,7 +62,9 @@ def list_users() -> list[_IamUserInfo]:
     """List all IAM users (sorted by name) and their access keys."""
     iam = boto_client_iam()
     users = [
-        _IamUserInfo(username=user["UserName"], keys=get_keys(username=user["UserName"]))
+        _IamUserInfo(
+            username=user["UserName"], keys=get_keys(username=user["UserName"])
+        )
         for user in iam.list_users()["Users"]
     ]
     return sorted(users, key=lambda u: u.username)
@@ -126,6 +128,8 @@ def delete_user(*, username: str, protected_usernames: set[str]) -> None:
     keys = iam.list_access_keys(UserName=username)["AccessKeyMetadata"]
     if keys:
         raise ValueError(
-            "User '{}' still has {} access key(s). Delete them first.".format(username, len(keys))
+            "User '{}' still has {} access key(s). Delete them first.".format(
+                username, len(keys)
+            )
         )
     _ = iam.delete_user(UserName=username)
