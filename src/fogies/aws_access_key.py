@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 from pydantic import BaseModel
 
 from fogies.tools.aws_environ import AwsProfile
+from fogies.typing import boto_client_iam
 
 if TYPE_CHECKING:
-    from mypy_boto3_iam.client import IAMClient
     from mypy_boto3_iam.type_defs import AccessKeyMetadataTypeDef
 
 
@@ -31,8 +31,9 @@ class _IamUserInfo(BaseModel):
     keys: _IamAccessKeys
 
 
-def get_keys(*, iam: IAMClient, username: str) -> _IamAccessKeys:
+def get_keys(*, username: str) -> _IamAccessKeys:
     """Return the access keys for a user as current (newest) and previous (oldest)."""
+    iam = boto_client_iam()
     raw_keys = iam.list_access_keys(UserName=username)["AccessKeyMetadata"]
     sorted_keys = sorted(
         raw_keys,
@@ -57,17 +58,19 @@ def get_keys(*, iam: IAMClient, username: str) -> _IamAccessKeys:
     )
 
 
-def list_users(*, iam: IAMClient) -> list[_IamUserInfo]:
+def list_users() -> list[_IamUserInfo]:
     """List all IAM users (sorted by name) and their access keys."""
+    iam = boto_client_iam()
     users = [
-        _IamUserInfo(username=user["UserName"], keys=get_keys(iam=iam, username=user["UserName"]))
+        _IamUserInfo(username=user["UserName"], keys=get_keys(username=user["UserName"]))
         for user in iam.list_users()["Users"]
     ]
     return sorted(users, key=lambda u: u.username)
 
 
-def create_user(*, iam: IAMClient, username: str) -> AwsProfile:
+def create_user(*, username: str) -> AwsProfile:
     """Create a new IAM user and an access key. Raises if the user already exists."""
+    iam = boto_client_iam()
     existing = {u["UserName"] for u in iam.list_users()["Users"]}
     if username in existing:
         raise ValueError("User '{}' already exists.".format(username))
@@ -81,25 +84,20 @@ def create_user(*, iam: IAMClient, username: str) -> AwsProfile:
     )
 
 
-def rotate_key(
-    *,
-    iam: IAMClient,
-    username: str,
-    protected_key_ids: set[str] | None = None,
-) -> AwsProfile:
+def rotate_key(*, username: str, protected_key_ids: set[str]) -> AwsProfile:
     """Create a new access key for a user, deleting the previous key first if one exists.
 
     Raises ValueError if the previous key is in protected_key_ids.
     """
-    existing = get_keys(iam=iam, username=username)
+    existing = get_keys(username=username)
     if existing.previous is not None:
         delete_key(
-            iam=iam,
             username=username,
             key_id=existing.previous.key_id,
             protected_key_ids=protected_key_ids,
         )
 
+    iam = boto_client_iam()
     key = iam.create_access_key(UserName=username)["AccessKey"]
     return AwsProfile(
         name=username,
@@ -108,31 +106,21 @@ def rotate_key(
     )
 
 
-def delete_key(
-    *,
-    iam: IAMClient,
-    username: str,
-    key_id: str,
-    protected_key_ids: set[str] | None = None,
-) -> None:
+def delete_key(*, username: str, key_id: str, protected_key_ids: set[str]) -> None:
     """Delete a specific access key for the user.
 
     Raises ValueError if key_id is in protected_key_ids.
     """
-    if protected_key_ids and key_id in protected_key_ids:
+    if key_id in protected_key_ids:
         raise ValueError("Refusing to delete protected key '{}'.".format(key_id))
-    _ = iam.delete_access_key(UserName=username, AccessKeyId=key_id)
+    _ = boto_client_iam().delete_access_key(UserName=username, AccessKeyId=key_id)
 
 
-def delete_user(
-    *,
-    iam: IAMClient,
-    username: str,
-    protected_usernames: set[str] | None = None,
-) -> None:
+def delete_user(*, username: str, protected_usernames: set[str]) -> None:
     """Delete an IAM user. Raises if the user still has access keys or is protected."""
-    if protected_usernames and username in protected_usernames:
+    if username in protected_usernames:
         raise ValueError("Refusing to delete protected user '{}'.".format(username))
+    iam = boto_client_iam()
     keys = iam.list_access_keys(UserName=username)["AccessKeyMetadata"]
     if keys:
         raise ValueError(
