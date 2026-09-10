@@ -21,17 +21,17 @@ class _IamAccessKeyInfo(BaseModel):
     last_used: datetime.datetime | None
 
 
-class _IamAccessKeys(BaseModel):
+class IamAccessKeys(BaseModel):
     current: _IamAccessKeyInfo | None  # newest key
     previous: _IamAccessKeyInfo | None  # oldest key; only present when two keys exist
 
 
 class _IamUserInfo(BaseModel):
     username: str
-    keys: _IamAccessKeys
+    keys: IamAccessKeys
 
 
-def get_keys(*, username: str) -> _IamAccessKeys:
+def get_keys(*, username: str) -> IamAccessKeys:
     """Return the access keys for a user as current (newest) and previous (oldest)."""
     iam = boto_client_iam()
     raw_keys = iam.list_access_keys(UserName=username)["AccessKeyMetadata"]
@@ -52,7 +52,7 @@ def get_keys(*, username: str) -> _IamAccessKeys:
             last_used=last_used,
         )
 
-    return _IamAccessKeys(
+    return IamAccessKeys(
         current=_to_info(sorted_keys[0]) if len(sorted_keys) >= 1 else None,
         previous=_to_info(sorted_keys[1]) if len(sorted_keys) >= 2 else None,
     )

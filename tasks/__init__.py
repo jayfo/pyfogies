@@ -3,14 +3,33 @@
 import colorama
 from invoke.collection import Collection
 
+import fogies.tasks.access_key
 import fogies.tasks.format
 import fogies.tasks.lint
 import fogies.tasks.poetry
 import fogies.tasks.test
+from fogies.tools.aws_environ import AwsEnvironContextManager, aws_environ_from_toml
 from tasks.paths import (
+    PATH_SECRETS_AWS,
     PATH_SECRETS_POETRY,
     PATH_STAGING_BINARY_CACHE,
 )
+
+# Stand-in until a dedicated admin profile exists.
+_ACCESS_KEY_PROFILE = "probe"
+
+
+def _lazy_aws_environ() -> AwsEnvironContextManager:
+    """Build a fresh AWS environment for the access-key profile.
+
+    A fresh instance per call: get_collection() shares this factory across
+    five tasks, and a context manager built by @contextlib.contextmanager can
+    only be entered once.
+    """
+    return aws_environ_from_toml(
+        profiles_path=PATH_SECRETS_AWS, profile_name=_ACCESS_KEY_PROFILE
+    )
+
 
 # Root namespace for tasks.
 namespace: Collection = Collection()
@@ -30,6 +49,9 @@ namespace.add_task(
 namespace.add_task(fogies.tasks.lint.get_task_lint())
 namespace.add_collection(
     fogies.tasks.poetry.get_collection(path_secrets_poetry=PATH_SECRETS_POETRY)
+)
+namespace.add_collection(
+    fogies.tasks.access_key.get_collection(aws_environ=_lazy_aws_environ)
 )
 
 # A collection for subsets of tests.
