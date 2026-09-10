@@ -1,4 +1,10 @@
-"""Tests for fogies.tools.aws_environ."""
+"""Tests for fogies.tools.aws_environ.
+
+Credential validation makes a real STS call, so these tests use real
+credentials from the local secrets file (like tests/unit/test_aws_access_key.py,
+no mocks) rather than faking STS or using placeholder values that could never
+validate.
+"""
 
 import os
 from pathlib import Path
@@ -9,50 +15,62 @@ from fogies.tools.aws_environ import (
     AwsProfile,
     aws_environ_from_profile,
     aws_environ_from_toml,
+    load_aws_profile_from_toml,
 )
+from tasks.paths import PATH_SECRETS_AWS
+from tests.pyfogies_tests_config import PyfogiesTestsConfig
 
 
 def test_aws_environ_from_profile_sets_variables(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, pyfogies_test_config: PyfogiesTestsConfig
 ) -> None:
     """aws_environ_from_profile sets variables from an AwsProfile using environ."""
-
-    # Start from a clean environment for these variables within this test.
     monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
     monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
 
-    profile = AwsProfile(
-        name="test",
-        aws_access_key_id="value-aws-access-key-id",
-        aws_secret_access_key="value-aws-secret-access-key",
-    )
-    other_profile = AwsProfile(
-        name="test-other",
-        aws_access_key_id="other-value-aws-access-key-id",
-        aws_secret_access_key="other-value-aws-secret-access-key",
+    profile = load_aws_profile_from_toml(
+        profiles_path=PATH_SECRETS_AWS, profile_name=pyfogies_test_config.aws.profile
     )
 
     with aws_environ_from_profile(profile=profile) as env:
-        assert env.profile == "test"
-        assert env.aws_access_key_id == "value-aws-access-key-id"
-        assert os.environ.get("AWS_ACCESS_KEY_ID") == "value-aws-access-key-id"
-        assert os.environ.get("AWS_SECRET_ACCESS_KEY") == "value-aws-secret-access-key"
+        assert env.profile == profile.name
+        assert env.aws_access_key_id == profile.aws_access_key_id
+        assert os.environ.get("AWS_ACCESS_KEY_ID") == profile.aws_access_key_id
+        assert os.environ.get("AWS_SECRET_ACCESS_KEY") == profile.aws_secret_access_key
 
-    with aws_environ_from_profile(profile=other_profile) as env:
-        assert env.profile == "test-other"
-        assert env.aws_access_key_id == "other-value-aws-access-key-id"
-        assert os.environ.get("AWS_ACCESS_KEY_ID") == "other-value-aws-access-key-id"
-        assert (
-            os.environ.get("AWS_SECRET_ACCESS_KEY")
-            == "other-value-aws-secret-access-key"
-        )
+    assert "AWS_ACCESS_KEY_ID" not in os.environ
+    assert "AWS_SECRET_ACCESS_KEY" not in os.environ
+
+
+def test_aws_environ_from_profile_raises_for_invalid_credentials(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """aws_environ_from_profile raises ValueError when credentials don't validate.
+
+    Also confirms env vars are still restored on the way out, even though
+    validation fails before the context manager ever yields.
+    """
+    monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
+    monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
+
+    invalid_profile = AwsProfile(
+        name="invalid",
+        aws_access_key_id="AKIAIOSFODNN7EXAMPLE",
+        aws_secret_access_key="not-a-real-secret-key",
+    )
+
+    with pytest.raises(ValueError, match="Invalid AWS credentials"):
+        with aws_environ_from_profile(profile=invalid_profile):
+            pass
 
     assert "AWS_ACCESS_KEY_ID" not in os.environ
     assert "AWS_SECRET_ACCESS_KEY" not in os.environ
 
 
 def test_aws_environ_from_toml_reads_selected_profile(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    pyfogies_test_config: PyfogiesTestsConfig,
+    tmp_path: Path,
 ) -> None:
     """aws_environ_from_toml loads the named profile's credentials from the file.
 
@@ -60,36 +78,37 @@ def test_aws_environ_from_toml_reads_selected_profile(
     test_aws_environ_from_profile_sets_variables; aws_environ_from_toml
     delegates to aws_environ_from_profile for that. This test only covers
     what's specific to aws_environ_from_toml: reading the right profile out
-    of a multi-profile file.
+    of a multi-profile file. The unselected "decoy" profile's credentials are
+    never validated, so they don't need to be real.
     """
     monkeypatch.delenv("AWS_ACCESS_KEY_ID", raising=False)
     monkeypatch.delenv("AWS_SECRET_ACCESS_KEY", raising=False)
 
+    profile = load_aws_profile_from_toml(
+        profiles_path=PATH_SECRETS_AWS, profile_name=pyfogies_test_config.aws.profile
+    )
+
     profiles_path = tmp_path / "test_aws_environ.toml"
     config_text = "\n".join(
         [
-            "[test]",
-            'aws_access_key_id = "value-aws-access-key-id"',
-            'aws_secret_access_key = "value-aws-secret-access-key"',
+            "[decoy]",
+            'aws_access_key_id = "not-a-real-key"',
+            'aws_secret_access_key = "not-a-real-secret"',
             "",
-            "[test-other]",
-            'aws_access_key_id = "other-value-aws-access-key-id"',
-            'aws_secret_access_key = "other-value-aws-secret-access-key"',
+            "[selected]",
+            'aws_access_key_id = "{}"'.format(profile.aws_access_key_id),
+            'aws_secret_access_key = "{}"'.format(profile.aws_secret_access_key),
             "",
         ]
     )
     _ = profiles_path.write_text(config_text, encoding="utf-8")
 
     with aws_environ_from_toml(
-        profiles_path=profiles_path, profile_name="test-other"
+        profiles_path=profiles_path, profile_name="selected"
     ) as env:
-        assert env.profile == "test-other"
-        assert env.aws_access_key_id == "other-value-aws-access-key-id"
-        assert os.environ.get("AWS_ACCESS_KEY_ID") == "other-value-aws-access-key-id"
-        assert (
-            os.environ.get("AWS_SECRET_ACCESS_KEY")
-            == "other-value-aws-secret-access-key"
-        )
+        assert env.profile == "selected"
+        assert env.aws_access_key_id == profile.aws_access_key_id
+        assert os.environ.get("AWS_ACCESS_KEY_ID") == profile.aws_access_key_id
 
     assert "AWS_ACCESS_KEY_ID" not in os.environ
 

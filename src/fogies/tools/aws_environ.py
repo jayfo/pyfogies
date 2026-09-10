@@ -8,9 +8,11 @@ from collections.abc import Generator
 from pathlib import Path
 from typing import cast
 
+import botocore.exceptions
 from pydantic import BaseModel
 
 from fogies.tools.environ import environ
+from fogies.typing import boto_client_sts
 
 
 class AwsProfile(BaseModel):
@@ -32,7 +34,7 @@ class AwsEnviron(BaseModel):
 AwsEnvironContextManager = contextlib.AbstractContextManager[AwsEnviron]
 
 
-def _load_aws_profile_from_toml(profiles_path: Path, profile_name: str) -> AwsProfile:
+def load_aws_profile_from_toml(profiles_path: Path, profile_name: str) -> AwsProfile:
     """Return AWS profile loaded from a TOML profiles file.
 
     The file is expected to contain a table for each profile, for example:
@@ -84,6 +86,11 @@ def aws_environ_from_profile(
     freshly created/rotated) rather than read from a TOML profiles file; see
     aws_environ_from_toml() for that case, which delegates here.
 
+    Confirms the credentials actually work (via STS GetCallerIdentity) before
+    yielding, raising ValueError immediately rather than letting some later,
+    unrelated AWS call fail confusingly. The extra round trip is minor next
+    to the time lost misdiagnosing an unclear downstream error.
+
     Yields an :class:`AwsEnviron` describing which profile and key ID are active.
     """
     variables: dict[str, str] = {
@@ -95,6 +102,12 @@ def aws_environ_from_profile(
         raise_if_exists=raise_if_exists,
         raise_if_changed=raise_if_changed,
     ):
+        try:
+            _ = boto_client_sts().get_caller_identity()
+        except botocore.exceptions.ClientError as exc:
+            raise ValueError(
+                "Invalid AWS credentials for profile '{}': {}".format(profile.name, exc)
+            ) from exc
         yield AwsEnviron(
             profile=profile.name,
             aws_access_key_id=profile.aws_access_key_id,
@@ -114,11 +127,11 @@ def aws_environ_from_toml(
     The *profiles_path* parameter specifies the AWS TOML profiles file to read;
     it must have a ``.toml`` extension. The *profile_name* parameter specifies
     the AWS profile name, which is mapped to a ``[<name>]`` table in the
-    profiles file.
+    profiles file. See aws_environ_from_profile() for credential validation.
 
     Yields an :class:`AwsEnviron` describing which profile and key ID are active.
     """
-    aws_profile = _load_aws_profile_from_toml(
+    aws_profile = load_aws_profile_from_toml(
         profiles_path=profiles_path, profile_name=profile_name
     )
     with aws_environ_from_profile(
