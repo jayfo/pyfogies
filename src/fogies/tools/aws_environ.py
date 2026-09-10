@@ -26,12 +26,13 @@ class AwsEnviron(BaseModel):
     aws_access_key_id: str
 
 
-# Type for passing a pre-built aws_environ() context manager into a task
-# factory, to be entered when (and only when) the task actually runs.
+# Type for passing a pre-built AWS environment context manager (e.g. from
+# aws_environ_from_toml() or aws_environ_from_profile()) into a task factory,
+# to be entered when (and only when) the task actually runs.
 AwsEnvironContextManager = contextlib.AbstractContextManager[AwsEnviron]
 
 
-def _load_aws_profile_from_toml(profiles_path: Path, profile: str) -> AwsProfile:
+def _load_aws_profile_from_toml(profiles_path: Path, profile_name: str) -> AwsProfile:
     """Return AWS profile loaded from a TOML profiles file.
 
     The file is expected to contain a table for each profile, for example:
@@ -57,42 +58,37 @@ def _load_aws_profile_from_toml(profiles_path: Path, profile: str) -> AwsProfile
         data: dict[str, object] = tomllib.load(profiles_file)
 
     try:
-        profile_raw = data[profile]
+        profile_raw = data[profile_name]
     except KeyError as exc:
         raise KeyError(
             "AWS profile '{}' not found in '{}'".format(
-                profile,
+                profile_name,
                 profiles_path,
             )
         ) from exc
 
     profile_data = cast(dict[str, object], profile_raw)
-    return AwsProfile.model_validate({"name": profile, **profile_data})
+    return AwsProfile.model_validate({"name": profile_name, **profile_data})
 
 
 @contextlib.contextmanager
-def aws_environ(
+def aws_environ_from_profile(
     *,
-    profiles_path: Path,
-    profile: str,
+    profile: AwsProfile,
     raise_if_exists: bool = True,
     raise_if_changed: bool = True,
 ) -> Generator[AwsEnviron]:
-    """Context manager that applies AWS variables from a TOML file.
+    """Context manager that applies AWS variables from an already-known profile.
 
-    The *profiles_path* parameter specifies the AWS TOML profiles file to read;
-    it must have a ``.toml`` extension. The *profile* parameter specifies the
-    AWS profile name, which is mapped to a ``[<name>]`` table in the profiles
-    file.
+    For credentials obtained some other way (e.g. prompted interactively, or
+    freshly created/rotated) rather than read from a TOML profiles file; see
+    aws_environ_from_toml() for that case, which delegates here.
 
     Yields an :class:`AwsEnviron` describing which profile and key ID are active.
     """
-    aws_profile = _load_aws_profile_from_toml(
-        profiles_path=profiles_path, profile=profile
-    )
     variables: dict[str, str] = {
-        "AWS_ACCESS_KEY_ID": aws_profile.aws_access_key_id,
-        "AWS_SECRET_ACCESS_KEY": aws_profile.aws_secret_access_key,
+        "AWS_ACCESS_KEY_ID": profile.aws_access_key_id,
+        "AWS_SECRET_ACCESS_KEY": profile.aws_secret_access_key,
     }
     with environ(
         variables=variables,
@@ -100,6 +96,34 @@ def aws_environ(
         raise_if_changed=raise_if_changed,
     ):
         yield AwsEnviron(
-            profile=profile,
-            aws_access_key_id=aws_profile.aws_access_key_id,
+            profile=profile.name,
+            aws_access_key_id=profile.aws_access_key_id,
         )
+
+
+@contextlib.contextmanager
+def aws_environ_from_toml(
+    *,
+    profiles_path: Path,
+    profile_name: str,
+    raise_if_exists: bool = True,
+    raise_if_changed: bool = True,
+) -> Generator[AwsEnviron]:
+    """Context manager that applies AWS variables read from a TOML file.
+
+    The *profiles_path* parameter specifies the AWS TOML profiles file to read;
+    it must have a ``.toml`` extension. The *profile_name* parameter specifies
+    the AWS profile name, which is mapped to a ``[<name>]`` table in the
+    profiles file.
+
+    Yields an :class:`AwsEnviron` describing which profile and key ID are active.
+    """
+    aws_profile = _load_aws_profile_from_toml(
+        profiles_path=profiles_path, profile_name=profile_name
+    )
+    with aws_environ_from_profile(
+        profile=aws_profile,
+        raise_if_exists=raise_if_exists,
+        raise_if_changed=raise_if_changed,
+    ) as env:
+        yield env
