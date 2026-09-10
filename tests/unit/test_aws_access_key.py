@@ -2,7 +2,6 @@
 
 from collections.abc import Iterator
 
-import botocore.exceptions
 import pytest
 
 import fogies.aws_access_key as aws_access_key
@@ -10,16 +9,15 @@ from fogies.tools.aws_environ import AwsEnviron, AwsProfile
 from fogies.typing import boto_client_sts
 
 _TEST_USERNAME = "pyfogies-test-aws-access-key"
+_NONEXISTENT_USERNAME = "pyfogies-test-aws-access-key-nonexistent"
 
 
 def _delete_test_user_if_exists(pyfogies_test_aws_environ: AwsEnviron) -> None:
     """Delete the test user and all its keys if it exists."""
     try:
         keys = aws_access_key.get_keys(username=_TEST_USERNAME)
-    except botocore.exceptions.ClientError as e:
-        if (e.response.get("Error") or {}).get("Code") == "NoSuchEntity":
-            return
-        raise
+    except ValueError:
+        return
     for key in (keys.current, keys.previous):
         if key is not None:
             aws_access_key.delete_key(
@@ -62,10 +60,8 @@ def test_profile_known_state(
     _ = test_profile
     try:
         keys = aws_access_key.get_keys(username=_TEST_USERNAME)
-    except botocore.exceptions.ClientError as e:
-        if (e.response.get("Error") or {}).get("Code") == "NoSuchEntity":
-            return aws_access_key.create_user(username=_TEST_USERNAME)
-        raise
+    except ValueError:
+        return aws_access_key.create_user(username=_TEST_USERNAME)
     if keys.previous is not None:
         # Deleting previous leaves current intact — no need to re-fetch.
         aws_access_key.delete_key(
@@ -83,6 +79,26 @@ def test_profile_known_state(
         aws_access_key_id=keys.current.key_id,
         aws_secret_access_key="",
     )
+
+
+def test_get_keys_raises_for_missing_user(
+    pyfogies_test_aws_environ: AwsEnviron,
+) -> None:
+    """get_keys raises ValueError (not a raw botocore exception) for a nonexistent user."""
+    _ = pyfogies_test_aws_environ
+    with pytest.raises(ValueError, match="not found"):
+        _ = aws_access_key.get_keys(username=_NONEXISTENT_USERNAME)
+
+
+def test_delete_user_raises_for_missing_user(
+    pyfogies_test_aws_environ: AwsEnviron,
+) -> None:
+    """delete_user raises ValueError (not a raw botocore exception) for a nonexistent user."""
+    _ = pyfogies_test_aws_environ
+    with pytest.raises(ValueError, match="not found"):
+        aws_access_key.delete_user(
+            username=_NONEXISTENT_USERNAME, protected_usernames=set()
+        )
 
 
 def test_create_user_raises_if_exists(test_profile: AwsProfile) -> None:

@@ -32,9 +32,15 @@ class _IamUserInfo(BaseModel):
 
 
 def get_keys(*, username: str) -> IamAccessKeys:
-    """Return the access keys for a user as current (newest) and previous (oldest)."""
+    """Return the access keys for a user as current (newest) and previous (oldest).
+
+    Raises ValueError if the user does not exist.
+    """
     iam = boto_client_iam()
-    raw_keys = iam.list_access_keys(UserName=username)["AccessKeyMetadata"]
+    try:
+        raw_keys = iam.list_access_keys(UserName=username)["AccessKeyMetadata"]
+    except iam.exceptions.NoSuchEntityException as exc:
+        raise ValueError("IAM user '{}' not found.".format(username)) from exc
     sorted_keys = sorted(
         raw_keys,
         key=lambda k: k.get("CreateDate") or datetime.datetime.min,
@@ -121,11 +127,17 @@ def delete_key(*, username: str, key_id: str, protected_key_ids: set[str]) -> No
 
 
 def delete_user(*, username: str, protected_usernames: set[str]) -> None:
-    """Delete an IAM user. Raises if the user still has access keys or is protected."""
+    """Delete an IAM user.
+
+    Raises ValueError if the user does not exist, still has access keys, or is protected.
+    """
     if username in protected_usernames:
         raise ValueError("Refusing to delete protected user '{}'.".format(username))
     iam = boto_client_iam()
-    keys = iam.list_access_keys(UserName=username)["AccessKeyMetadata"]
+    try:
+        keys = iam.list_access_keys(UserName=username)["AccessKeyMetadata"]
+    except iam.exceptions.NoSuchEntityException as exc:
+        raise ValueError("IAM user '{}' not found.".format(username)) from exc
     if keys:
         raise ValueError(
             "User '{}' still has {} access key(s). Delete them first.".format(
