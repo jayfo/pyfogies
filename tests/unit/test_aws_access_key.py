@@ -237,7 +237,7 @@ def test_delete_user_raises_if_protected(
         key_id=test_profile_known_state.aws_access_key_id,
         protected_key_ids={pyfogies_test_aws_environ.aws_access_key_id},
     )
-    with pytest.raises(ValueError, match="protected user"):
+    with pytest.raises(ValueError, match="protected IAM user"):
         aws_access_key.delete_user(
             username=_TEST_USERNAME,
             protected_usernames={_TEST_USERNAME, test_aws_environ_username},

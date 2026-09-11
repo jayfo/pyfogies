@@ -32,9 +32,9 @@ class _IamUserInfo(BaseModel):
 
 
 def get_keys(*, username: str) -> IamAccessKeys:
-    """Return the access keys for a user as current (newest) and previous (oldest).
+    """Return the access keys for an IAM user as current (newest) and previous (oldest).
 
-    Raises ValueError if the user does not exist.
+    Raises ValueError if the IAM user does not exist.
     """
     iam = boto_client_iam()
     try:
@@ -77,11 +77,11 @@ def list_users() -> list[_IamUserInfo]:
 
 
 def create_user(*, username: str) -> AwsProfile:
-    """Create a new IAM user and an access key. Raises if the user already exists."""
+    """Create a new IAM user and an access key. Raises if the IAM user already exists."""
     iam = boto_client_iam()
     try:
         _ = iam.get_user(UserName=username)
-        raise ValueError("User '{}' already exists.".format(username))
+        raise ValueError("IAM user '{}' already exists.".format(username))
     except iam.exceptions.NoSuchEntityException:
         pass
 
@@ -95,7 +95,7 @@ def create_user(*, username: str) -> AwsProfile:
 
 
 def rotate_key(*, username: str, protected_key_ids: set[str]) -> AwsProfile:
-    """Create a new access key for a user, deleting the previous key first if one exists.
+    """Create a new access key for an IAM user, deleting the previous key first if one exists.
 
     Raises ValueError if the previous key is in protected_key_ids.
     """
@@ -117,7 +117,7 @@ def rotate_key(*, username: str, protected_key_ids: set[str]) -> AwsProfile:
 
 
 def delete_key(*, username: str, key_id: str, protected_key_ids: set[str]) -> None:
-    """Delete a specific access key for the user.
+    """Delete a specific access key for the IAM user.
 
     Raises ValueError if key_id is in protected_key_ids.
     """
@@ -129,19 +129,15 @@ def delete_key(*, username: str, key_id: str, protected_key_ids: set[str]) -> No
 def delete_user(*, username: str, protected_usernames: set[str]) -> None:
     """Delete an IAM user.
 
-    Raises ValueError if the user does not exist, still has access keys, or is protected.
+    Raises ValueError if the IAM user does not exist, still has access keys, or is protected.
     """
     if username in protected_usernames:
-        raise ValueError("Refusing to delete protected user '{}'.".format(username))
+        raise ValueError("Refusing to delete protected IAM user '{}'.".format(username))
     iam = boto_client_iam()
     try:
         keys = iam.list_access_keys(UserName=username)["AccessKeyMetadata"]
     except iam.exceptions.NoSuchEntityException as exc:
         raise ValueError("IAM user '{}' not found.".format(username)) from exc
     if keys:
-        raise ValueError(
-            "User '{}' still has {} access key(s). Delete them first.".format(
-                username, len(keys)
-            )
-        )
+        raise ValueError("IAM user '{}' still has an access key.".format(username))
     _ = iam.delete_user(UserName=username)

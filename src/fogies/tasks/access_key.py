@@ -86,7 +86,7 @@ def _print_toml_block(*, profile: AwsProfile) -> None:
 def _print_user_key_overview(
     *, username: str, keys: aws_access_key.IamAccessKeys
 ) -> None:
-    """Print a user's key overview: current/previous key details, or a no-keys note.
+    """Print an IAM user's key overview: current/previous key details, or a no-keys note.
 
     Shared by `list` (once per user) and `delete-key`'s confirmation prompt
     (for the one user being acted on), so both show the same information.
@@ -179,7 +179,7 @@ def get_task_delete_key(
             keys = aws_access_key.get_keys(username=username)
             target = keys.previous or keys.current
             if target is None:
-                raise SystemExit("User '{}' has no access keys.".format(username))
+                raise SystemExit("IAM user '{}' has no access keys.".format(username))
             key_id = target.key_id
             _print_user_key_overview(username=username, keys=keys)
             print()
