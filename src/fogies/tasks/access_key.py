@@ -22,8 +22,8 @@ from fogies.typing import boto_client_sts
 # A factory rather than a pre-built context manager: get_collection() shares
 # this across five tasks, and a context manager built by @contextlib.
 # contextmanager can only be entered once, so each task must build its own
-# fresh instance at run time. Mirrors the _lazy_aws_environ() pattern used by
-# consumers of these tasks (see e.g. fogies-infrastructure's tasks/__init__.py).
+# fresh instance at run time. Mirrors the _aws_environ_factory() pattern used
+# by consumers of these tasks (see e.g. fogies-infrastructure's tasks/__init__.py).
 AwsEnvironFactory = Callable[[], AwsEnvironContextManager]
 
 
@@ -36,16 +36,16 @@ def _prompt_admin_credentials() -> tuple[str, str]:
 
 @contextlib.contextmanager
 def _resolve_admin_environ(
-    *, aws_environ: AwsEnvironFactory | None, prompt: bool
+    *, aws_environ_factory: AwsEnvironFactory | None, prompt: bool
 ) -> Generator[str]:
     """Enter the configured AWS environment, or prompt for admin credentials.
 
-    Prompts if aws_environ is None, or if prompt is True (e.g. to use
+    Prompts if aws_environ_factory is None, or if prompt is True (e.g. to use
     different/elevated credentials for a single run). Prompted credentials
     are never written anywhere. Yields the active access key ID.
     """
-    if aws_environ is not None and not prompt:
-        with aws_environ() as env:
+    if aws_environ_factory is not None and not prompt:
+        with aws_environ_factory() as env:
             yield env.aws_access_key_id
         return
 
@@ -107,7 +107,7 @@ def _print_user_key_overview(
 
 
 def get_task_create(
-    *, aws_environ: AwsEnvironFactory | None = None
+    *, aws_environ_factory: AwsEnvironFactory | None = None
 ) -> Task[Callable[..., None]]:
     @task(name="create")  # pyright: ignore[reportUntypedFunctionDecorator]
     def task_create(context: Context, *, prompt: bool = False, username: str) -> None:
@@ -119,7 +119,7 @@ def get_task_create(
           --username  IAM username.
         """
         _ = context
-        with _resolve_admin_environ(aws_environ=aws_environ, prompt=prompt):
+        with _resolve_admin_environ(aws_environ_factory=aws_environ_factory, prompt=prompt):
             new_profile = aws_access_key.create_user(username=username)
         print("Created IAM user '{}'.".format(username))
         print("Created access key {}.".format(new_profile.aws_access_key_id))
@@ -129,7 +129,7 @@ def get_task_create(
 
 
 def get_task_delete(
-    *, aws_environ: AwsEnvironFactory | None = None
+    *, aws_environ_factory: AwsEnvironFactory | None = None
 ) -> Task[Callable[..., None]]:
     @task(name="delete")  # pyright: ignore[reportUntypedFunctionDecorator]
     def task_delete(context: Context, *, prompt: bool = False, username: str) -> None:
@@ -141,7 +141,7 @@ def get_task_delete(
           --username  IAM username.
         """
         _ = context
-        with _resolve_admin_environ(aws_environ=aws_environ, prompt=prompt):
+        with _resolve_admin_environ(aws_environ_factory=aws_environ_factory, prompt=prompt):
             protected_username = _caller_username()
             confirm = (
                 input("Delete IAM user '{}'? [y/N] ".format(username)).strip().lower()
@@ -159,7 +159,7 @@ def get_task_delete(
 
 
 def get_task_delete_key(
-    *, aws_environ: AwsEnvironFactory | None = None
+    *, aws_environ_factory: AwsEnvironFactory | None = None
 ) -> Task[Callable[..., None]]:
     @task(name="delete-key")  # pyright: ignore[reportUntypedFunctionDecorator]
     def task_delete_key(
@@ -174,7 +174,7 @@ def get_task_delete_key(
         """
         _ = context
         with _resolve_admin_environ(
-            aws_environ=aws_environ, prompt=prompt
+            aws_environ_factory=aws_environ_factory, prompt=prompt
         ) as admin_key_id:
             keys = aws_access_key.get_keys(username=username)
             target = keys.previous or keys.current
@@ -203,7 +203,7 @@ def get_task_delete_key(
 
 
 def get_task_list(
-    *, aws_environ: AwsEnvironFactory | None = None
+    *, aws_environ_factory: AwsEnvironFactory | None = None
 ) -> Task[Callable[..., None]]:
     @task(name="list")  # pyright: ignore[reportUntypedFunctionDecorator]
     def task_list(context: Context, *, prompt: bool = False) -> None:
@@ -214,7 +214,7 @@ def get_task_list(
           --prompt  Prompt for admin credentials.
         """
         _ = context
-        with _resolve_admin_environ(aws_environ=aws_environ, prompt=prompt):
+        with _resolve_admin_environ(aws_environ_factory=aws_environ_factory, prompt=prompt):
             users = aws_access_key.list_users()
         if not users:
             print("No IAM users found.")
@@ -228,7 +228,7 @@ def get_task_list(
 
 
 def get_task_rotate_key(
-    *, aws_environ: AwsEnvironFactory | None = None
+    *, aws_environ_factory: AwsEnvironFactory | None = None
 ) -> Task[Callable[..., None]]:
     @task(name="rotate-key")  # pyright: ignore[reportUntypedFunctionDecorator]
     def task_rotate_key(
@@ -243,7 +243,7 @@ def get_task_rotate_key(
         """
         _ = context
         with _resolve_admin_environ(
-            aws_environ=aws_environ, prompt=prompt
+            aws_environ_factory=aws_environ_factory, prompt=prompt
         ) as admin_key_id:
             new_profile = aws_access_key.rotate_key(
                 username=username,
@@ -255,12 +255,12 @@ def get_task_rotate_key(
     return cast(Task[Callable[..., None]], task_rotate_key)
 
 
-def get_collection(*, aws_environ: AwsEnvironFactory | None = None) -> Collection:
+def get_collection(*, aws_environ_factory: AwsEnvironFactory | None = None) -> Collection:
     """Get a collection of tasks for managing IAM users and access keys."""
     collection = Collection("access-key")
-    collection.add_task(get_task_create(aws_environ=aws_environ))
-    collection.add_task(get_task_delete(aws_environ=aws_environ))
-    collection.add_task(get_task_delete_key(aws_environ=aws_environ))
-    collection.add_task(get_task_list(aws_environ=aws_environ))
-    collection.add_task(get_task_rotate_key(aws_environ=aws_environ))
+    collection.add_task(get_task_create(aws_environ_factory=aws_environ_factory))
+    collection.add_task(get_task_delete(aws_environ_factory=aws_environ_factory))
+    collection.add_task(get_task_delete_key(aws_environ_factory=aws_environ_factory))
+    collection.add_task(get_task_list(aws_environ_factory=aws_environ_factory))
+    collection.add_task(get_task_rotate_key(aws_environ_factory=aws_environ_factory))
     return collection

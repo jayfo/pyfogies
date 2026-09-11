@@ -19,7 +19,7 @@ from tasks.paths import (
 _ACCESS_KEY_PROFILE = "probe"
 
 
-def _lazy_aws_environ() -> AwsEnvironContextManager:
+def _aws_environ_factory() -> AwsEnvironContextManager:
     """Build a fresh AWS environment for the access-key profile.
 
     A fresh instance per call: get_collection() shares this factory across
@@ -51,7 +51,7 @@ namespace.add_collection(
     fogies.tasks.poetry.get_collection(path_secrets_poetry=PATH_SECRETS_POETRY)
 )
 namespace.add_collection(
-    fogies.tasks.access_key.get_collection(aws_environ=_lazy_aws_environ)
+    fogies.tasks.access_key.get_collection(aws_environ_factory=_aws_environ_factory)
 )
 
 # A collection for subsets of tests.
